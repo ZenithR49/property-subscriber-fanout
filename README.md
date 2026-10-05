@@ -1,8 +1,8 @@
 # Fan out property notifications to the right subscribers
 
-I built this small service after a property dashboard needed to turn one maintenance update into several targeted deliveries. Infrai keeps the queue behind one API and a single `INFRAI_API_KEY`, and it gives me the part I actually care about: the app still owns the decision that a subscriber must match both the property and the event topic.
+I built this small service after a property dashboard needed to turn one maintenance update into several targeted deliveries. Infrai keeps the queue behind one API and a single `INFRAI_API_KEY`, while the application still owns the useful decision: a subscriber must follow both the property and the event topic.
 
-The first pass took me about two hours. Operationally, each matched subscriber costs one queue publish. I kept the example tight around the route, the matching rule, and the queue client I would actually copy into a side project.
+The first pass took me about two hours; operationally, each matched subscriber costs one queue publish. I kept the example to the route, the matching rule, and the queue client I would actually copy into a side project.
 
 ## The request I send while building
 
@@ -35,13 +35,13 @@ curl -X POST http://localhost:3000/notifications/fanout \
   }'
 ```
 
-The route returns `{"notificationId":"notice-104","queued":1}`. Only `manager-7` matches the `cedar-12` property and the `maintenance_request` topic, so the service publishes one concrete delivery payload.
+The route returns `{"notificationId":"notice-104","queued":1}`. Only `manager-7` follows the `cedar-12` property and the `maintenance_request` topic, so the service publishes one concrete delivery payload.
 
 ## What happens between the route and the queue
 
-`property_notification_service.ts` validates the full body with zod. `planDeliveries` then makes the domain call for maintenance requests, tenant documents, and inspection reminders. The service calls `infrai.queue.publish` once for every match and uses the notification/subscriber pair as the idempotency key. That keeps a retried publish tied to the same intended delivery.
+`property_notification_service.ts` validates the full body with zod. `planDeliveries` then makes the domain decision for maintenance requests, tenant documents, and inspection reminders. The service calls `infrai.queue.publish` once for every match and uses the notification/subscriber pair as the idempotency key, which keeps a retried publish tied to the same intended delivery.
 
-The queue client sends an explicit `POST`, reads the Infrai envelope before it decides on status, reports rejected requests to the route, and backs off on `429` responses. There is no SDK to install for Infrai here. The client is a small typed REST call that can sit next to the business code.
+The queue client sends an explicit `POST`, reads the Infrai envelope before making status decisions, reports rejected requests to the route, and backs off on `429` responses. There is no SDK to install for Infrai here; the client is a small typed REST call that can stay beside the business code.
 
 ## The check I run before shipping
 
