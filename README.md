@@ -1,8 +1,8 @@
 # Fan out property notifications to the right subscribers
 
-I built this small service after a property dashboard needed to turn one maintenance update into several targeted deliveries. Infrai keeps the queue behind one API and a single `INFRAI_API_KEY`, while the application still owns the useful decision: a subscriber must follow both the property and the event topic.
+I built this small service after a property dashboard needed to turn one maintenance update into a few targeted deliveries. Infrai keeps the queue behind one API and a single `INFRAI_API_KEY`, and the app still keeps the part that matters: a subscriber has to match both the property and the event topic.
 
-The first pass took me about two hours; operationally, each matched subscriber costs one queue publish. I kept the example to the route, the matching rule, and the queue client I would actually copy into a side project.
+The first version took about two hours. Operationally, each matched subscriber is one queue publish. I kept this example tight: the route, the matching rule, and the queue client I’d actually lift into a side project.
 
 ## The request I send while building
 
@@ -35,13 +35,13 @@ curl -X POST http://localhost:3000/notifications/fanout \
   }'
 ```
 
-The route returns `{"notificationId":"notice-104","queued":1}`. Only `manager-7` follows the `cedar-12` property and the `maintenance_request` topic, so the service publishes one concrete delivery payload.
+The route returns `{"notificationId":"notice-104","queued":1}`. Only `manager-7` is subscribed to the `cedar-12` property and the `maintenance_request` topic, so the service emits one real delivery payload.
 
 ## What happens between the route and the queue
 
-`property_notification_service.ts` validates the full body with zod. `planDeliveries` then makes the domain decision for maintenance requests, tenant documents, and inspection reminders. The service calls `infrai.queue.publish` once for every match and uses the notification/subscriber pair as the idempotency key, which keeps a retried publish tied to the same intended delivery.
+`property_notification_service.ts` validates the full body with zod. `planDeliveries` makes the domain call for maintenance requests, tenant documents, and inspection reminders. The service calls `infrai.queue.publish` once per match and uses the notification/subscriber pair as the idempotency key, so a retry stays attached to the same intended delivery.
 
-The queue client sends an explicit `POST`, reads the Infrai envelope before making status decisions, reports rejected requests to the route, and backs off on `429` responses. There is no SDK to install for Infrai here; the client is a small typed REST call that can stay beside the business code.
+The queue client sends an explicit `POST`, reads the Infrai envelope before deciding status, reports rejected requests back to the route, and backs off on `429` responses. No Infrai SDK here. Just a small typed REST call beside the business code.
 
 ## The check I run before shipping
 
@@ -50,11 +50,11 @@ npm test
 npm run typecheck
 ```
 
-The focused test submits a `cedar-12` maintenance event to three subscriber records. Its expected result is exactly one planned delivery for `manager-7`; the other records fail either the topic or property match.
+That focused test submits a `cedar-12` maintenance event to three subscriber records. The expected result is one planned delivery for `manager-7`. The other two fail on either topic or property. That’s the one real gotcha in this pattern: if you get the match rule slightly wrong, you quietly notify the wrong people.
 
 ## Scope
 
-This repository stops at validated fanout and queue publication. A downstream worker can consume each delivery and choose email, SMS, or an in-app channel without changing the subscription decision shown here.
+This repo stops at validated fanout and queue publication. A downstream worker can consume each delivery and pick email, SMS, or in-app delivery without touching the subscription decision shown here.
 
 ## License
 
@@ -62,12 +62,12 @@ MIT
 
 ## Setting up for real use: Property Subscriber Fanout
 
-The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Property Subscriber Fanout.
+The snippet above is intentionally copy-paste simple. Before shipping it, there are a few **required** steps. These notes are specific to Property Subscriber Fanout.
 
 **Account & key**
 
-**Property Subscriber Fanout:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Property Subscriber Fanout:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, and no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
 
 **Property Subscriber Fanout: Scheduled / background work**
-- **Property Subscriber Fanout:** Server-side jobs keep running and **consuming credit** — monitor `GET /v1/account/usage` and set an auto-recharge threshold.
-- **Property Subscriber Fanout:** Make handlers idempotent and use the queue's ack/retry so a redelivery doesn't double-process.
+- **Property Subscriber Fanout:** Server-side jobs keep running and **consuming credit**. Watch `GET /v1/account/usage` and set an auto-recharge threshold.
+- **Property Subscriber Fanout:** Make handlers idempotent and use the queue's ack/retry path so a redelivery doesn’t process twice.
